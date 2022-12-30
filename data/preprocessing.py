@@ -90,17 +90,17 @@ def read_csv_2d(filename=None, pad_range=(40, 50), time_range=(265, 280), strict
     def sel(df, col, limits):
         return (df[col] >= limits[0]) & (df[col] < limits[1])
 
-    if 'drift_length' in df.columns:
-        df['itime'] -= df['drift_length'].astype(int)
-
-    if 'pad_coordinate' in df.columns:
-        df['ipad'] -= df['pad_coordinate'].astype(int)
+    # if 'drift_length' in df.columns:
+    #     df['itime'] -= df['drift_length'].astype(int)
+    #
+    # if 'pad_coordinate' in df.columns:
+    #     df['ipad'] -= df['pad_coordinate'].astype(int)
 
     selection = sel(df, 'itime', time_range) & sel(df, 'ipad', pad_range)
     g = df[selection].groupby('evtId')
-    bad_ids = df[~selection]['evtId'].unique()
-    anti_selection = df['evtId'].apply(lambda x: x in bad_ids)
-    anti_g = df[anti_selection].groupby('evtId')
+    # bad_ids = df[~selection]['evtId'].unique()
+    # anti_selection = df['evtId'].apply(lambda x: x in bad_ids)
+    # anti_g = df[anti_selection].groupby('evtId')
 
     # if not selection.all():
     #     msg = (
@@ -112,11 +112,10 @@ def read_csv_2d(filename=None, pad_range=(40, 50), time_range=(265, 280), strict
 
     def convert_event(event):
         result = np.zeros(dtype=float, shape=(pad_range[1] - pad_range[0], time_range[1] - time_range[0]))
-
         indices = tuple(event[['ipad', 'itime']].values.T - np.array([[pad_range[0]], [time_range[0]]]))
         result[indices] = event.amp.values
-
         return result
+
     data = np.stack(g.apply(convert_event).values)
     # anti_data = None
     # if not selection.all() and misc_out is not None:

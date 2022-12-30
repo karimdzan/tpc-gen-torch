@@ -1,31 +1,42 @@
 import torch
+import torchvision.transforms as T
+from torch.utils.data import DataLoader
 import numpy as np
 from model import Discriminator, Generator
 from tqdm import tqdm
 from data.preprocessing import read_csv_2d
-from metrics.plotting import plot_metrics
+from metrics import plotting
+from utils import LoadData
+from scalers import get_scaler
 
 
 class Trainer(object):
-    def __init__(self, epochs=1000, num_disc_updates=5, batch_size=64, latent_dim=32):
+    def __init__(self, epochs=1000, num_disc_updates=5, batch_size=32, latent_dim=32, scaler='identity'):
         self.step_counter = 0
         self.NUM_DISC_UPDATES = num_disc_updates
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.generator = Generator().to(self.device)
-        self.discriminator = Discriminator().to(self.device)
+        self.generator = Generator().to(self.device).double()
+        self.discriminator = Discriminator().to(self.device).double()
         self.generator = self.generator.apply(self.init_weights)
         self.discriminator = self.discriminator.apply(self.init_weights)
         self.optimizer_g = torch.optim.Adam(self.generator.parameters(), lr=0.01, betas=(0.5, 0.999))
         self.optimizer_d = torch.optim.Adam(self.discriminator.parameters(), lr=0.01, betas=(0.5, 0.999))
         self.epochs = epochs
-        self.dataloader_train = LoadData()
+        self.transform = T.Compose([
+            T.ToTensor()
+        ])
+        self.scaler = get_scaler(scaler_type=scaler)
         self.data, self.features = read_csv_2d(filename='data/data_v4/csv/digits.csv', strict=False)
+        self.data = self.scaler.scale(self.data)
+        self.data = LoadData(self.data, self.transform)
+        self.dataloader = DataLoader(self.data, batch_size=batch_size, pin_memory=True, num_workers=4)
+        self.features = torch.Tensor(self.features).double()
+        # self.features = self.transform(self.features)
         self.latent_dim = latent_dim
-        self.batch_size = batch_size
 
     def preprocess_features(self, features):
-        bin_fractions = features[:, 2:4] % 1
-        features = (features[:, :3] - torch.tensor([[0.0, 0.0, 162.5]])) / torch.tensor([[20.0, 60.0, 127.5]])
+        bin_fractions = torch.tensor(features[:, 2:4] % 1)
+        features = (features[:, :3] - np.array([[0.0, 0.0, 162.5]])) / np.array([[20.0, 60.0, 127.5]])
         return torch.cat((features, bin_fractions), -1)
 
     def gen_step(self, noise):
@@ -42,7 +53,7 @@ class Trainer(object):
     def disc_step(self, batch, noise):
         self.discriminator.zero_grad()
 
-        real_output = self.discriminator(batch)
+        real_output = self.discriminator(batch.double())
         errD_real = torch.mean(real_output)
         D_x = real_output.mean().item()
 
@@ -93,14 +104,14 @@ class Trainer(object):
         self.discriminator.train()
         self.generator.train()
         loss_history = {'disc_losses': [], 'gen_losses': []}
-        shuffle_ids = np.random.permutation(len(self.data))
         for epoch in range(self.epochs):
-            for i, data in tqdm(range(0, len(self.data), self.batch_size)):
-                batch = self.data[shuffle_ids][i : i + self.batch_size]
-                real_images = batch.to(self.device)
+            progress_bar = tqdm(enumerate(self.dataloader), total=len(self.dataloader))
+            for i, data in progress_bar:
+                data = data.view((32, 1, 10, 15)).double()
+                real_images = data.to(self.device)
                 batch_size = real_images.size(0)
                 noise = torch.normal(0, 1, size=(batch_size, self.latent_dim), device=self.device)
-                noise = torch.cat((self.preprocess_features(self.features), noise), -1)
+                noise = torch.cat((self.preprocess_features(self.features[batch_size * i:i * batch_size + batch_size, :]), noise), -1).double()
 
                 disc_loss = self.disc_step(real_images, noise)
 
@@ -114,6 +125,6 @@ class Trainer(object):
             print("disc_loss:    ", np.mean(loss_history['disc_losses']))
             print("gen_loss:    ", np.mean(loss_history['gen_losses']))
 
-        plot_metrics(loss_history['gen_losses'], loss_history['disc_loss'])
+        plotting.plot_metrics(loss_history['gen_losses'], loss_history['disc_loss'])
 
 
