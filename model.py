@@ -1,64 +1,66 @@
 import torch.nn as nn
+import torch
 
 
 class Discriminator(nn.Module):
     def __init__(self):
         super().__init__()
         self.classifier = nn.Sequential(
-            nn.Conv2d(in_channels=1, out_channels=16, kernel_size=3, padding='same'),
+            nn.Conv2d(in_channels=1, out_channels=64, kernel_size=3, padding='same', bias=False),
             nn.ELU(),
-            nn.Dropout(0.2),
-            # nn.MaxPool2d(kernel_size=(2, 2), padding='same'),
-            nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding='same'),
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding='same', bias=False),
+            nn.BatchNorm2d(128),
             nn.ELU(),
-            nn.Dropout(0.2),
-            # nn.MaxPool2d(kernel_size=(2, 2), padding='same'),
-            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding='valid'),
+            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding='same', bias=False),
+            nn.BatchNorm2d(256),
             nn.ELU(),
-            nn.Dropout(0.2)
+            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding='same', bias=False),
+            nn.BatchNorm2d(512),
+            nn.ELU(),
+            nn.Conv2d(in_channels=512, out_channels=1, kernel_size=1, bias=False)
         )
-        self.lin = nn.Sequential(
-            nn.Linear(in_features=128, out_features=128),
-            nn.ELU(),
-            nn.Dropout(0.2),
-            nn.Linear(in_features=128, out_features=1),
-            nn.ELU()
-        )
+        self.act = nn.Sigmoid()
+        self.apply(weights_init)
 
     def forward(self, input):
         out = self.classifier(input)
-        # out = out.view((128, ))
-        out = self.lin(out)
+        out = out.view((input.shape[0], -1))
+        out = self.act(out)
         return out
 
 
 class Generator(nn.Module):
     def __init__(self):
         super().__init__()
-        self.lin = nn.Sequential(
-            nn.Linear(in_features=37, out_features=64),
-            nn.ELU(),
-            nn.Linear(in_features=64, out_features=480),
-            nn.ELU()
-        )
         self.gen = nn.Sequential(
-            nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, padding='same'),
-            nn.ELU(),
-            nn.Upsample(scale_factor=2),
-            nn.Conv2d(in_channels=32, out_channels=16, kernel_size=3, padding='same'),
-            nn.ELU(),
-            nn.Upsample(scale_factor=2),
-            nn.Conv2d(in_channels=16, out_channels=8, kernel_size=3, padding='same'),
-            nn.ELU(),
-            nn.Conv2d(in_channels=8, out_channels=4, kernel_size=(3, 2), padding='valid'),
-            nn.ELU(),
-            nn.Conv2d(in_channels=4, out_channels=1, kernel_size=1, padding='valid'),
-            nn.ELU()
+            nn.ConvTranspose2d(in_channels=34, out_channels=512, kernel_size=4, bias=False),
+            nn.BatchNorm2d(512),
+            nn.ReLU(),
+            nn.ConvTranspose2d(in_channels=512, out_channels=256, kernel_size=4, bias=False),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.ConvTranspose2d(in_channels=256, out_channels=128, kernel_size=4, bias=False),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.ConvTranspose2d(in_channels=128, out_channels=1, kernel_size=4, bias=False),
+            nn.Tanh()
         )
+        self.output_linear = nn.Linear(in_features=169, out_features=150)
+        self.apply(weights_init)
 
     def forward(self, input):
-        out = self.lin(input)
-        out = out.view((3, 4, 40))
-        out = self.gen(out)
-        out = out.view((10, 15))
-        return out
+            input = input.unsqueeze(-1).unsqueeze(-1)
+            out = self.gen(input)
+            out = out.view((-1, 169))
+            out = self.output_linear(out)
+            out = out.view((-1, 1, 10, 15))
+            return out
+
+
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Linear') != -1:
+        nn.init.normal_(m.weight.data, 0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        nn.init.normal_(m.weight.data, 1.0, 0.02)
+        nn.init.constant_(m.bias.data, 0)
