@@ -19,13 +19,11 @@ class Discriminator(nn.Module):
             nn.ELU(),
             nn.Conv2d(in_channels=512, out_channels=1, kernel_size=1, bias=False)
         )
-        self.act = nn.Sigmoid()
         self.apply(weights_init)
 
     def forward(self, input):
         out = self.classifier(input)
         out = out.view((input.shape[0], -1))
-        out = self.act(out)
         return out
 
 
@@ -33,7 +31,7 @@ class Generator(nn.Module):
     def __init__(self):
         super().__init__()
         self.gen = nn.Sequential(
-            nn.ConvTranspose2d(in_channels=34, out_channels=512, kernel_size=4, bias=False),
+            nn.ConvTranspose2d(in_channels=32, out_channels=512, kernel_size=4, bias=False),
             nn.BatchNorm2d(512),
             nn.ReLU(),
             nn.ConvTranspose2d(in_channels=512, out_channels=256, kernel_size=4, bias=False),
@@ -49,12 +47,12 @@ class Generator(nn.Module):
         self.apply(weights_init)
 
     def forward(self, input):
-            input = input.unsqueeze(-1).unsqueeze(-1)
-            out = self.gen(input)
-            out = out.view((-1, 169))
-            out = self.output_linear(out)
-            out = out.view((-1, 1, 10, 15))
-            return out
+        input = input.unsqueeze(-1).unsqueeze(-1)
+        out = self.gen(input)
+        out = out.view((-1, 169))
+        out = self.output_linear(out)
+        out = out.view((-1, 1, 10, 15))
+        return out
 
 
 def weights_init(m):

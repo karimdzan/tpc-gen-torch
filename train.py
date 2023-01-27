@@ -9,14 +9,16 @@ from data.preprocessing import read_csv_2d
 from metrics import plotting
 from utils import LoadData
 from scalers import get_scaler
+import torchvision.utils as vutils
+import os
 
 
 class Trainer(object):
 
-    def __init__(self, epochs=1000, num_disc_updates=5, batch_size=1, latent_dim=32, scaler='identity'):
+    def __init__(self, epochs=2000, num_disc_updates=5, batch_size=32, latent_dim=32, scaler='identity'):
         self.step_counter = 0
         self.NUM_DISC_UPDATES = num_disc_updates
-        self.device = torch.device('mps')
+        self.device = torch.device('cuda:0')
         self.generator = Generator().to(self.device)
         self.discriminator = Discriminator().to(self.device)
         self.optimizer_g = torch.optim.Adam(self.generator.parameters(), lr=0.01, betas=(0.5, 0.999))
@@ -35,6 +37,7 @@ class Trainer(object):
         self.features = np.float32(self.features)
         # self.features = self.transform(self.features)
         self.latent_dim = latent_dim
+        self.batch_size = batch_size
 
     # def preprocess_features(self, features):
     #     print(features.shape)
@@ -102,12 +105,13 @@ class Trainer(object):
         for epoch in range(self.epochs):
             progress_bar = tqdm(enumerate(self.dataloader), total=len(self.dataloader))
             for i, data in progress_bar:
-                data = data.view((1, 1, 10, 15))
+                # print(data.shape)
+                # data = data.view((self.batch_size, 1, 10, 15))
                 real_images = data.to(self.device)
                 batch_size = real_images.size(0)
                 noise = torch.normal(0, 1, size=(batch_size, self.latent_dim), device=self.device)
-                noise = torch.cat((
-                    torch.tensor(self.features[batch_size * i:i * batch_size + batch_size, :], device=self.device), noise), -1)
+                # noise = torch.cat((
+                #     torch.tensor(self.features[batch_size * i:i * batch_size + batch_size, :], device=self.device), noise), -1)
 
                 disc_loss = self.disc_step(real_images, noise)
 
@@ -118,9 +122,19 @@ class Trainer(object):
                     loss_history['gen_losses'].append(gen_loss)
 
             print("epoch:   ", epoch)
-            print("disc_loss:    ", np.mean(loss_history['disc_losses']))
-            print("gen_loss:    ", np.mean(loss_history['gen_losses']))
+            print("disc_loss:    ", torch.mean(torch.tensor(loss_history['disc_losses'])))
+            print("gen_loss:    ", torch.mean(torch.tensor(loss_history['gen_losses'])))
 
-        plotting.plot_metrics(loss_history['gen_losses'], loss_history['disc_loss'])
+            if (epoch + 1) % 500 == 0:
+                vutils.save_image(real_images,
+                                  os.path.join("output", "real_samples.png"),
+                                  normalize=True)
+                fake = self.generator(noise)
+                vutils.save_image(fake.detach(),
+                                  os.path.join("output", f"fake_samples_{epoch + 1}.png"),
+                                  normalize=True)
 
+            if (epoch + 1) % 50 == 0:
+                plotting.plot_metrics(loss_history['disc_losses'], loss_history['gen_losses'])
 
+        plotting.plot_metrics(loss_history['gen_losses'], loss_history['disc_losses'])
