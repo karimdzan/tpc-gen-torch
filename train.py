@@ -32,7 +32,7 @@ class Trainer(object):
         self.data = self.scaler.scale(self.data)
         self.data = np.float32(self.data)
         self.data = LoadData(self.data, self.transform)
-        self.dataloader = DataLoader(self.data, batch_size=batch_size)
+        self.dataloader = DataLoader(self.data, batch_size=batch_size, num_workers=4, pin_memory=True)
         # self.features = torch.Tensor(self.features)
         self.features = np.float32(self.features)
         # self.features = self.transform(self.features)
@@ -121,9 +121,9 @@ class Trainer(object):
                     loss_history['disc_losses'].append(disc_loss)
                     loss_history['gen_losses'].append(gen_loss)
 
-            print("epoch:   ", epoch)
-            print("disc_loss:    ", torch.mean(torch.tensor(loss_history['disc_losses'])))
-            print("gen_loss:    ", torch.mean(torch.tensor(loss_history['gen_losses'])))
+            # print("epoch:   ", epoch)
+            # print("disc_loss:    ", torch.mean(torch.tensor(loss_history['disc_losses'])))
+            # print("gen_loss:    ", torch.mean(torch.tensor(loss_history['gen_losses'])))
 
             if (epoch + 1) % 500 == 0:
                 vutils.save_image(real_images,
@@ -134,7 +134,8 @@ class Trainer(object):
                                   os.path.join("output", f"fake_samples_{epoch + 1}.png"),
                                   normalize=True)
 
-            if (epoch + 1) % 50 == 0:
-                plotting.plot_metrics(loss_history['disc_losses'], loss_history['gen_losses'])
-
+            if (epoch + 1) % 4 == 0:
+                plotting.plot_metrics(loss_history['gen_losses'], loss_history['disc_losses'])
         plotting.plot_metrics(loss_history['gen_losses'], loss_history['disc_losses'])
+
+
