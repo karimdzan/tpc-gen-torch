@@ -7,17 +7,17 @@ class Discriminator(nn.Module):
         super().__init__()
         self.classifier = nn.Sequential(
             nn.Conv2d(in_channels=1, out_channels=64, kernel_size=3, padding='same', bias=False),
-            nn.ELU(),
+            nn.LeakyReLU(0.2, True),
             nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding='same', bias=False),
             nn.BatchNorm2d(128),
-            nn.ELU(),
+            nn.LeakyReLU(0.2, True),
             nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding='same', bias=False),
             nn.BatchNorm2d(256),
-            nn.ELU(),
+            nn.LeakyReLU(0.2, True),
             nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding='same', bias=False),
             nn.BatchNorm2d(512),
-            nn.ELU(),
-            nn.Conv2d(in_channels=512, out_channels=1, kernel_size=1, bias=False)
+            nn.LeakyReLU(0.2, True),
+            nn.Conv2d(512, 1, 3, 1, 0)
         )
         self.apply(weights_init)
 
@@ -57,7 +57,7 @@ class Generator(nn.Module):
 
 def weights_init(m):
     classname = m.__class__.__name__
-    if classname.find('Linear') != -1:
+    if classname.find('Conv') != -1:
         nn.init.normal_(m.weight.data, 0.0, 0.02)
     elif classname.find('BatchNorm') != -1:
         nn.init.normal_(m.weight.data, 1.0, 0.02)

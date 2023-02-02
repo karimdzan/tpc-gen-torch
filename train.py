@@ -11,6 +11,7 @@ from utils import LoadData
 from scalers import get_scaler
 import torchvision.utils as vutils
 import os
+import wandb
 
 
 class Trainer(object):
@@ -21,8 +22,8 @@ class Trainer(object):
         self.device = torch.device('cuda:0')
         self.generator = Generator().to(self.device)
         self.discriminator = Discriminator().to(self.device)
-        self.optimizer_g = torch.optim.Adam(self.generator.parameters(), lr=0.01, betas=(0.5, 0.999))
-        self.optimizer_d = torch.optim.Adam(self.discriminator.parameters(), lr=0.01, betas=(0.5, 0.999))
+        self.optimizer_g = torch.optim.RMSprop(self.generator.parameters(), lr=0.00005)
+        self.optimizer_d = torch.optim.RMSprop(self.discriminator.parameters(), lr=0.00005)
         self.epochs = epochs
         self.transform = T.Compose([
             T.ToTensor()
@@ -99,8 +100,13 @@ class Trainer(object):
         return gradient_penalty
 
     def train(self):
+        wandb.login()
+        wandb.init(project="coursework", entity="karimdzan")
+
         self.discriminator.train()
         self.generator.train()
+        wandb.watch(self.discriminator)
+        wandb.watch(self.generator)
         loss_history = {'disc_losses': [], 'gen_losses': []}
         for epoch in range(self.epochs):
             progress_bar = tqdm(enumerate(self.dataloader), total=len(self.dataloader))
@@ -121,9 +127,16 @@ class Trainer(object):
                     loss_history['disc_losses'].append(disc_loss)
                     loss_history['gen_losses'].append(gen_loss)
 
-            # print("epoch:   ", epoch)
-            # print("disc_loss:    ", torch.mean(torch.tensor(loss_history['disc_losses'])))
-            # print("gen_loss:    ", torch.mean(torch.tensor(loss_history['gen_losses'])))
+            disc_loss = torch.mean(torch.tensor(loss_history['disc_losses']))
+            gen_loss = torch.mean(torch.tensor(loss_history['gen_losses']))
+            print("epoch:   ", epoch)
+            print("disc_loss:    ", disc_loss)
+            print("gen_loss:    ", gen_loss)
+            wandb.log({
+                "Epoch": epoch,
+                "gen Loss": gen_loss,
+                "disc loss": disc_loss})
+
 
             if (epoch + 1) % 500 == 0:
                 vutils.save_image(real_images,
@@ -134,8 +147,7 @@ class Trainer(object):
                                   os.path.join("output", f"fake_samples_{epoch + 1}.png"),
                                   normalize=True)
 
-            if (epoch + 1) % 4 == 0:
-                plotting.plot_metrics(loss_history['gen_losses'], loss_history['disc_losses'])
-        plotting.plot_metrics(loss_history['gen_losses'], loss_history['disc_losses'])
+        wandb.finish()
+
 
 
